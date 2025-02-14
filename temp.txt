@@ -1,0 +1,21 @@
+JButton cropButton = new JButton("CROP");
+        JButton rotateButton = new JButton("ROTATE");
+        JButton flipButton = new JButton("FLIP");
+        JButton brightnessButton = new JButton("BRIGHTNESS");
+        JButton contrastButton = new JButton("CONTRAST");
+        JButton hueButton = new JButton("HUE");
+        JButton saturationButton = new JButton("SATURATION");
+        
+options.add(cropButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(rotateButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(flipButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(brightnessButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(contrastButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(hueButton);
+        options.add(Box.createVerticalStrut(5));
+        options.add(saturationButton);

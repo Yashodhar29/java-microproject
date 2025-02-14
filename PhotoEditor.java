@@ -4,7 +4,7 @@ import java.awt.event.*;
 import java.awt.image.*;
 import javax.imageio.*;
 import java.io.*;
-
+//  NOTE: created by chatGPT
 public class PhotoEditor extends JFrame {
     private BufferedImage image;
     private JLabel imageLabel;

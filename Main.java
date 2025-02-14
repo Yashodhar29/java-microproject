@@ -5,16 +5,20 @@ import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.time.temporal.JulianFields;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.border.Border;
-import javax.swing.border.EmptyBorder;
+import java.awt.AlphaComposite;
+import java.awt.Color;
+import java.awt.Graphics2D;
+// import java.awt.image.BufferedImage;
 
 class CustomPanel extends JPanel {
     private BufferedImage backgroundImage = null;
-
+    // private BufferedImage copyImage = null;
+    
+    int left, right, top, bottom;
+    int imageWidth, imageHeight;
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -23,8 +27,8 @@ class CustomPanel extends JPanel {
             int panelHeight = getHeight();
 
             // Get the width and height of the image
-            int imageWidth = backgroundImage.getWidth();
-            int imageHeight = backgroundImage.getHeight();
+            imageWidth = backgroundImage.getWidth();
+            imageHeight = backgroundImage.getHeight();
 
             // Calculate the scaling factor to fit the image within the panel
             double scaleX = (double) panelWidth / imageWidth;
@@ -44,10 +48,103 @@ class CustomPanel extends JPanel {
         }
     }
 
-    // Method to set the background image
+    public BufferedImage cropImage(int left, int right, int top, int bottom) {
+        int width = this.imageWidth - right - left;
+        int height = this.imageHeight - bottom - top;
+        BufferedImage croppedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = top; y <this.imageHeight - bottom; y++) {
+            for (int x = left; x < this.imageWidth - right; x++) {
+                int rgb = backgroundImage.getRGB(x, y);
+                croppedImage.setRGB(x - left, y - top, rgb);
+            }
+        }
+        return croppedImage;
+    }
+
+    public BufferedImage flipImage(boolean horizontal, boolean vertical) {
+        BufferedImage flippedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
+        if(horizontal) {
+            for (int y = 0; y < imageHeight; y++) {
+                for (int x = 0; x < imageWidth; x++) {
+                    int rgb = backgroundImage.getRGB(x, y);
+                    flippedImage.setRGB(imageWidth - x - 1, y, rgb);
+                }
+            }
+            return flippedImage;
+        } else {
+            for (int y = 0; y < imageHeight; y++) {
+                for (int x = 0; x < imageWidth; x++) {
+                    int rgb = backgroundImage.getRGB(x, y);
+                    flippedImage.setRGB(x, imageHeight - y - 1, rgb);
+                }   
+            }
+        }
+        return flippedImage;
+    }
+
+    public BufferedImage rotateImage(int angle) {
+        BufferedImage rotatedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = rotatedImage.createGraphics();
+        g2d.rotate(Math.toRadians(angle), imageWidth / 2.0, imageHeight / 2.0);
+        g2d.drawImage(backgroundImage, 0, 0, null);
+        g2d.dispose();
+        return rotatedImage;
+    }
+
+    
+public BufferedImage adjustBrightness(int brightness) {
+    int width = backgroundImage.getWidth();
+    int height = backgroundImage.getHeight();
+    
+    // Create an output image that supports transparency.
+    BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    
+    // Get the Graphics2D context.
+    Graphics2D g2d = adjustedImage.createGraphics();
+    
+    // Draw the original image.
+    g2d.drawImage(backgroundImage, 0, 0, null);
+    
+    // Only apply an overlay if brightness is non-zero.
+    if (brightness != 0) {
+        // Calculate the overlay opacity.
+        // brightness is expected to be in the range -100 to 100.
+        // For darkening, brightness < 0, we overlay black.
+        // For brightening, brightness > 0, we overlay white.
+        float alpha = Math.min(Math.abs(brightness) / 100.0f, 1.0f);
+        Color overlayColor = (brightness > 0) ? Color.WHITE : Color.BLACK;
+        
+        // Set the composite with the calculated alpha.
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+        g2d.setColor(overlayColor);
+        g2d.fillRect(0, 0, width, height);
+    }
+    
+    // Dispose the graphics context.
+    g2d.dispose();
+    
+    return adjustedImage;
+}
+    // private BufferedImage deepCopy(BufferedImage image) {
+    //     BufferedImage copy = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
+    //     Graphics2D g2d = copy.createGraphics();
+    //     g2d.drawImage(image, 0, 0, null);
+    //     g2d.dispose();
+    //     return copy;
+    // }
+
     public void setBackgroundImage(BufferedImage image) {
         this.backgroundImage = image;
-        repaint(); // Repaint the panel to apply the new image
+        // this.copyImage = deepCopy(image);
+        repaint(); 
+    }
+
+    public void reset(boolean reset) {
+        if (reset) {
+            System.out.println("reaching here");
+            // this.backgroundImage = deepCopy(copyImage);
+            // repaint();
+        }
     }
 
     public void setCropMode(boolean cropMode) {
@@ -147,7 +244,12 @@ public class Main {
         options.setMaximumSize(new Dimension(300, 800));
         options.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JButton[] listOfButtons = new JButton[7];
+        // NOTE: 
+        // 1. Cropping of image done yusss yess I am happy thank I really thank.
+        // 2. Ohh my GOD, the rotate has also completed. I am so happy. The sky is limit. Thank you
+        // 3. I am stunned to see that flip is also completed. Thank you so much.
+
+        JButton[] listOfButtons = new JButton[8];
 
         listOfButtons[0] = new JButton("CROP");
         listOfButtons[1] = new JButton("ROTATE");
@@ -156,6 +258,7 @@ public class Main {
         listOfButtons[4] = new JButton("CONTRAST");
         listOfButtons[5] = new JButton("HUE");
         listOfButtons[6] = new JButton("SATURATION");
+        listOfButtons[7] = new JButton("RESET");
 
         // NOTE: Setting the buttons in options
 
@@ -163,19 +266,7 @@ public class Main {
             options.add(button);
             options.add(Box.createVerticalStrut(5));
         }
-        // options.add(cropButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(rotateButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(flipButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(brightnessButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(contrastButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(hueButton);
-        // options.add(Box.createVerticalStrut(5));
-        // options.add(saturationButton);
+
         CustomPanel adjustments = new CustomPanel();
         adjustments.setLayout(new BoxLayout(adjustments, BoxLayout.Y_AXIS));
         adjustments.setBackground(new Color(146, 147, 148));
@@ -214,11 +305,12 @@ public class Main {
                         adjustments.add(cropSubmitButton);
                         cropSubmitButton.addActionListener(e1 -> {
                             // NOTE: was working on crop feature
-                            int left = Integer.parseInt(((JTextField) adjustments.getComponent(3)).getText());
-                            int right = Integer.parseInt(((JTextField) adjustments.getComponent(5)).getText());
-                            int top = Integer.parseInt(((JTextField) adjustments.getComponent(7)).getText());
-                            int bottom = Integer.parseInt(((JTextField) adjustments.getComponent(9)).getText());
-
+                            int left = Integer.parseInt(((JTextField) adjustments.getComponent(2)).getText());
+                            int right = Integer.parseInt(((JTextField) adjustments.getComponent(4)).getText());
+                            int top = Integer.parseInt(((JTextField) adjustments.getComponent(6)).getText());
+                            int bottom = Integer.parseInt(((JTextField) adjustments.getComponent(8)).getText());
+                            BufferedImage croppedImage = canvas.cropImage(left, right, top, bottom);
+                            canvas.setBackgroundImage(croppedImage);
 
                             adjustments.removeAll();
                             adjustments.add(adjustmentsLabel);
@@ -226,14 +318,77 @@ public class Main {
                             adjustments.repaint();
                         });
                         break;
-                    case "ROTATE":
+                        case "ROTATE":
+
                         canvas.setRotateMode(true);
+                        adjustments.add(new JLabel("Angle: "));
+                        JTextField angleField = new JTextField("");
+                        angleField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+                        adjustments.add(angleField);
+
+
+                        JButton rotateSubmitButton = new JButton("Submit");
+                        adjustments.add(rotateSubmitButton);
+
+
+
+                        rotateSubmitButton.addActionListener(e1 -> {
+                            int angle = Integer.parseInt(((JTextField) adjustments.getComponent(2)).getText());
+                            BufferedImage rotatedImage = canvas.rotateImage(angle);
+                            canvas.setBackgroundImage(rotatedImage);
+                            adjustments.removeAll();
+                            adjustments.add(adjustmentsLabel);
+                            adjustments.revalidate();
+                            adjustments.repaint();
+                        });
+
+
                         break;
                     case "FLIP":
                         canvas.setFlipMode(true);
+                        JButton horizontalFlipButton = new JButton("HORIZONTAL");
+                        adjustments.add(horizontalFlipButton);
+                        
+                        JButton verticalFlipButton = new JButton("VERTICAL");
+                        adjustments.add(verticalFlipButton);
+
+                        horizontalFlipButton.addActionListener(e1 -> {
+                            BufferedImage flippedImage = canvas.flipImage(true, false);
+                            canvas.setBackgroundImage(flippedImage);
+                            adjustments.removeAll();
+                            adjustments.add(adjustmentsLabel);
+                            adjustments.revalidate();
+                            adjustments.repaint();
+                        });
+
+                        verticalFlipButton.addActionListener(e1 -> {
+                            BufferedImage flippedImage = canvas.flipImage(false, true);
+                            canvas.setBackgroundImage(flippedImage);
+                            adjustments.removeAll();
+                            adjustments.add(adjustmentsLabel);
+                            adjustments.revalidate();
+                            adjustments.repaint();
+                        });
+
+
+
                         break;
                     case "BRIGHTNESS":
                         canvas.setBrightnessMode(true);
+                        adjustments.add(new JLabel("Brightness: "));
+                        JTextField brightnessInputField = new JTextField("");
+                        JButton brightnessSubmitButton = new JButton("submit");
+
+
+                        brightnessSubmitButton.addActionListener(a -> {
+                            int value = Integer.parseInt(brightnessInputField.getText());
+
+                            BufferedImage brightenedImage = canvas.adjustBrightness(value);
+                            canvas.setBackgroundImage(brightenedImage);
+
+                        });
+                        adjustments.add(brightnessInputField);
+                        adjustments.add(brightnessSubmitButton );
                         break;
                     case "CONTRAST":
                         canvas.setContrastMode(true);
@@ -243,6 +398,9 @@ public class Main {
                         break;
                     case "SATURATION":
                         canvas.setSaturationMode(true);
+                        break;
+                    case "RESET":
+                        canvas.reset(true);
                         break;
                 }
 

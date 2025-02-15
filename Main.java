@@ -1,21 +1,23 @@
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Stack;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import java.awt.AlphaComposite;
-import java.awt.Color;
-import java.awt.Graphics2D;
-// import java.awt.image.BufferedImage;
 
 class CustomPanel extends JPanel {
     private BufferedImage backgroundImage = null;
-    // private BufferedImage copyImage = null;
+    private String imagePath = null;
+    private Stack<BufferedImage>undoStack = new Stack<>();
+    private Stack<BufferedImage>redoStack = new Stack<>();
     
     int left, right, top, bottom;
     int imageWidth, imageHeight;
@@ -48,7 +50,7 @@ class CustomPanel extends JPanel {
         }
     }
 
-    public BufferedImage cropImage(int left, int right, int top, int bottom) {
+    public void cropImage(int left, int right, int top, int bottom) {
         int width = this.imageWidth - right - left;
         int height = this.imageHeight - bottom - top;
         BufferedImage croppedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
@@ -58,10 +60,12 @@ class CustomPanel extends JPanel {
                 croppedImage.setRGB(x - left, y - top, rgb);
             }
         }
-        return croppedImage;
+        undoStack.push(this.getBackgroundImage());
+        redoStack.clear();
+        this.setBackgroundImage(croppedImage);
     }
 
-    public BufferedImage flipImage(boolean horizontal, boolean vertical) {
+    public void flipImage(boolean horizontal, boolean vertical) {
         BufferedImage flippedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
         if(horizontal) {
             for (int y = 0; y < imageHeight; y++) {
@@ -70,7 +74,8 @@ class CustomPanel extends JPanel {
                     flippedImage.setRGB(imageWidth - x - 1, y, rgb);
                 }
             }
-            return flippedImage;
+            undoStack.push(this.getBackgroundImage());
+            this.setBackgroundImage(flippedImage);
         } else {
             for (int y = 0; y < imageHeight; y++) {
                 for (int x = 0; x < imageWidth; x++) {
@@ -79,129 +84,221 @@ class CustomPanel extends JPanel {
                 }   
             }
         }
-        return flippedImage;
+        undoStack.push(this.getBackgroundImage());
+        redoStack.clear();
+        this.setBackgroundImage(flippedImage);
     }
 
-    public BufferedImage rotateImage(int angle) {
+    public void rotateImage(int angle) {
         BufferedImage rotatedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
         Graphics2D g2d = rotatedImage.createGraphics();
         g2d.rotate(Math.toRadians(angle), imageWidth / 2.0, imageHeight / 2.0);
         g2d.drawImage(backgroundImage, 0, 0, null);
         g2d.dispose();
-        return rotatedImage;
+        this.setBackgroundImage(rotatedImage);
+        undoStack.push(this.getBackgroundImage());
+        redoStack.clear();
     }
 
     
-public BufferedImage adjustBrightness(int brightness) {
+
+public void adjustContrast(int contrast) {
     int width = backgroundImage.getWidth();
     int height = backgroundImage.getHeight();
-    
-    // Create an output image that supports transparency.
-    BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-    
-    // Get the Graphics2D context.
-    Graphics2D g2d = adjustedImage.createGraphics();
-    
-    // Draw the original image.
-    g2d.drawImage(backgroundImage, 0, 0, null);
-    
-    // Only apply an overlay if brightness is non-zero.
-    if (brightness != 0) {
-        // Calculate the overlay opacity.
-        // brightness is expected to be in the range -100 to 100.
-        // For darkening, brightness < 0, we overlay black.
-        // For brightening, brightness > 0, we overlay white.
-        float alpha = Math.min(Math.abs(brightness) / 100.0f, 1.0f);
-        Color overlayColor = (brightness > 0) ? Color.WHITE : Color.BLACK;
-        
-        // Set the composite with the calculated alpha.
-        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
-        g2d.setColor(overlayColor);
-        g2d.fillRect(0, 0, width, height);
+    BufferedImage adjustedImage = new BufferedImage(width, height, backgroundImage.getType());
+
+    // Convert contrast range from [-100, 100] to a factor (1.0 means no change)
+    float factor = (float) (contrast / 100.0 + 1.0);
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int rgb = backgroundImage.getRGB(x, y);
+            int a = (rgb >> 24) & 0xFF; // Extract alpha
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+
+            // Adjust contrast: (color - 128) * factor + 128
+            r = (int) ((r - 128) * factor + 128);
+            g = (int) ((g - 128) * factor + 128);
+            b = (int) ((b - 128) * factor + 128);
+
+            // Clamp values between [0, 255]
+            r = Math.min(Math.max(r, 0), 255);
+            g = Math.min(Math.max(g, 0), 255);
+            b = Math.min(Math.max(b, 0), 255);
+
+            int newRGB = (a << 24) | (r << 16) | (g << 8) | b;
+            adjustedImage.setRGB(x, y, newRGB);
+        }
     }
-    
-    // Dispose the graphics context.
-    g2d.dispose();
-    
-    return adjustedImage;
+    undoStack.push(this.getBackgroundImage());
+    redoStack.clear();
+    this.setBackgroundImage(adjustedImage);
 }
-    // private BufferedImage deepCopy(BufferedImage image) {
-    //     BufferedImage copy = new BufferedImage(image.getWidth(), image.getHeight(), image.getType());
-    //     Graphics2D g2d = copy.createGraphics();
-    //     g2d.drawImage(image, 0, 0, null);
-    //     g2d.dispose();
-    //     return copy;
-    // }
 
-    public void setBackgroundImage(BufferedImage image) {
+
+
+public void adjustOpacity(int opacity) {
+    int width = backgroundImage.getWidth();
+    int height = backgroundImage.getHeight();
+    BufferedImage adjustedImage = new BufferedImage(width, height, backgroundImage.getType());
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int rgb = backgroundImage.getRGB(x, y);
+            int a = (rgb >> 24) & 0xFF; // Extract alpha
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+
+            // Adjust opacity: alpha * opacity / 100
+            a = (int) (a * opacity / 100.0);
+
+            // Clamp values between [0, 255]
+            a = Math.min(Math.max(a, 0), 255);
+
+            int newRGB = (a << 24) | (r << 16) | (g << 8) | b;
+            adjustedImage.setRGB(x, y, newRGB);
+        }
+    }
+    undoStack.push(this.getBackgroundImage());
+    redoStack.clear();
+    this.setBackgroundImage(adjustedImage);
+}
+
+public void adjustSaturation(int saturation) {
+    int width = backgroundImage.getWidth();
+    int height = backgroundImage.getHeight();
+    BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
+    // Convert input range (-100 to 100) to a usable factor
+    float saturationFactor = (saturation / 100.0f) + 1.0f; // -100 → 0.0, 0 → 1.0, +100 → 2.0
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int rgb = backgroundImage.getRGB(x, y);
+            int alpha = (rgb >> 24) & 0xFF; // Extract alpha
+
+            // Extract RGB values
+            int red = (rgb >> 16) & 0xFF;
+            int green = (rgb >> 8) & 0xFF;
+            int blue = rgb & 0xFF;
+
+            // Convert RGB to HSB
+            float[] hsb = Color.RGBtoHSB(red, green, blue, null);
+
+            // Adjust the saturation and clamp it between [0,1]
+            hsb[1] *= saturationFactor;
+            hsb[1] = Math.min(1.0f, Math.max(0.0f, hsb[1]));
+
+            // Convert back to RGB
+            int newRGB = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+
+            // Preserve the original alpha channel
+            int finalRGB = (alpha << 24) | (newRGB & 0xFFFFFF);
+            adjustedImage.setRGB(x, y, finalRGB);
+        }
+    }
+    undoStack.push(this.getBackgroundImage());
+    redoStack.clear();
+    this.setBackgroundImage(adjustedImage);
+}
+
+public void invertImage() {
+    // Create a new BufferedImage to store the inverted image
+    BufferedImage invertedImage = new BufferedImage(backgroundImage.getWidth(), backgroundImage.getHeight(), backgroundImage.getType());
+
+    // Iterate through each pixel of the image
+    for (int x = 0; x < backgroundImage.getWidth(); x++) {
+        for (int y = 0; y < backgroundImage.getHeight(); y++) {
+            // Get the RGB value of the current pixel
+            int rgb = backgroundImage.getRGB(x, y);
+
+            // Extract the color components (red, green, blue)
+            Color color = new Color(rgb);
+            int red = color.getRed();
+            int green = color.getGreen();
+            int blue = color.getBlue();
+
+            // Invert the colors by subtracting each component from 255
+            int invertedRed = 255 - red;
+            int invertedGreen = 255 - green;
+            int invertedBlue = 255 - blue;
+
+            // Set the new inverted color back to the pixel
+            Color invertedColor = new Color(invertedRed, invertedGreen, invertedBlue);
+            invertedImage.setRGB(x, y, invertedColor.getRGB());
+        }
+    }
+
+    // Return the inverted image
+    undoStack.push(this.getBackgroundImage());
+    redoStack.clear();
+    this.setBackgroundImage(invertedImage);
+}
+
+public void setImagePath(String path) {
+    System.out.println("obtained path: " + path);
+    this.imagePath = path;
+}
+
+public void setBackgroundImage(BufferedImage image) {
+    if (image != null) {
+        // Store a deep copy of the original image
         this.backgroundImage = image;
-        // this.copyImage = deepCopy(image);
-        repaint(); 
     }
+    repaint();
+}
 
-    public void reset(boolean reset) {
-        if (reset) {
-            System.out.println("reaching here");
-            // this.backgroundImage = deepCopy(copyImage);
-            // repaint();
-        }
-    }
+public BufferedImage getBackgroundImage() {
+    return backgroundImage;
+}
 
-    public void setCropMode(boolean cropMode) {
-        if (cropMode) {
-            setBackground(Color.RED);
+public void reset() {
+    File imageFile = new File(imagePath);
+    
+    try {
+        // Read the image using ImageIO.read()
+        BufferedImage image = ImageIO.read(imageFile);
+        if (image != null) {
+            System.out.println("Image loaded successfully.");
+            this.setBackgroundImage(image);
         } else {
-            setBackground(Color.WHITE);
+            System.out.println("Error: Image could not be read (returned null).");
         }
+    } catch (IOException ex) {
+        ex.printStackTrace();
+        System.out.println("Error reading the image file.");
     }
+}
 
-    public void setFlipMode(boolean flipMode) {
-        if (flipMode) {
-            setBackground(Color.BLUE);
-        } else {
-            setBackground(Color.WHITE);
-        }
+public void undo() {
+    if (!undoStack.isEmpty()) {
+        redoStack.push(this.getBackgroundImage()); // Save current state to redo stack
+        BufferedImage previousImage = undoStack.pop(); // Restore last image from undo stack
+        this.setBackgroundImage(previousImage);
+    } else {
+        JOptionPane.showMessageDialog(null, "No actions to undo!");
     }
+}
 
-    public void setRotateMode(boolean rotateMode) {
-        if (rotateMode) {
-            setBackground(Color.GREEN);
-        } else {
-            setBackground(Color.WHITE);
-        }
+public void redo() {
+    if (!redoStack.isEmpty()) {
+        undoStack.push(this.getBackgroundImage()); // Save current state to undo stack
+        BufferedImage nextImage = redoStack.pop(); // Restore last image from redo stack
+        this.setBackgroundImage(nextImage);
+    } else {
+        JOptionPane.showMessageDialog(null, "No actions to redo!");
     }
+}
 
-    public void setBrightnessMode(boolean brightnessMode) {
-        if (brightnessMode) {
-            setBackground(Color.YELLOW);
-        } else {
-            setBackground(Color.WHITE);
-        }
-    }
+public void about() {
+    String message = "Java Swing Photo Enhancer (MICROPROJECT)\nCreated By:\n1. Yashodhar Chavan(23210230262)\n2. Yuvraj Gandhmal(enrollment_no)";
+    JOptionPane.showMessageDialog(null, message);
 
-    public void setContrastMode(boolean contrastMode) {
-        if (contrastMode) {
-            setBackground(Color.PINK);
-        } else {
-            setBackground(Color.WHITE);
-        }
-    }
+}
 
-    public void setHueMode(boolean hueMode) {
-        if (hueMode) {
-            setBackground(Color.CYAN);
-        } else {
-            setBackground(Color.WHITE);
-        }
-    }
 
-    public void setSaturationMode(boolean saturationMode) {
-        if (saturationMode) {
-            setBackground(Color.MAGENTA);
-        } else {
-            setBackground(Color.WHITE);
-        }
-    }
 }
 
 public class Main {
@@ -217,9 +314,8 @@ public class Main {
         JMenuBar menuBar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
         JMenuItem fileItem1 = new JMenuItem("OPEN");
-        JMenuItem fileItem2 = new JMenuItem("SAVE (ctrl+s)");
-        JMenuItem fileItem3 = new JMenuItem("SAVE AS (ctrl+shift+s)");
-        JMenuItem fileItem4 = new JMenuItem("EXIT (alt+f4)");
+        JMenuItem fileItem2 = new JMenuItem("SAVE AS (ctrl+shift+s)");
+        JMenuItem fileItem3 = new JMenuItem("EXIT (alt+f4)");
 
         JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.X_AXIS));
@@ -248,17 +344,24 @@ public class Main {
         // 1. Cropping of image done yusss yess I am happy thank I really thank.
         // 2. Ohh my GOD, the rotate has also completed. I am so happy. The sky is limit. Thank you
         // 3. I am stunned to see that flip is also completed. Thank you so much.
+        // 4. Thank GOD reset also works. ChatGPT is very good I just know at high level what is happening
+        // 5. I really really thank universe. the saturation part is done.
+        // 6. contrast part is also done
+        // 7. invert also works very well
+        // 8. opacity works also well. What else we need?? I am totally happy now. Yes I did not code it but I at least understood it in high level
+        // I am so happy now. The universe made me happy. I really love engineers at chatGPT and universe. Thank you so much the 90% work is done. The software is ready. I did not thing I can do it. But it happend. 
+
 
         JButton[] listOfButtons = new JButton[8];
 
         listOfButtons[0] = new JButton("CROP");
         listOfButtons[1] = new JButton("ROTATE");
         listOfButtons[2] = new JButton("FLIP");
-        listOfButtons[3] = new JButton("BRIGHTNESS");
+        listOfButtons[3] = new JButton("OPACITY");
         listOfButtons[4] = new JButton("CONTRAST");
-        listOfButtons[5] = new JButton("HUE");
-        listOfButtons[6] = new JButton("SATURATION");
-        listOfButtons[7] = new JButton("RESET");
+        listOfButtons[5] = new JButton("SATURATION");
+        listOfButtons[6] = new JButton("RESET");
+        listOfButtons[7] = new JButton("INVERT");
 
         // NOTE: Setting the buttons in options
 
@@ -290,7 +393,6 @@ public class Main {
                 // Update canvas mode based on button text
                 switch (action) {
                     case "CROP":
-                        canvas.setCropMode(true);
                         // adjustments.add(new JLabel("CROP MODE ENABLED"));
                         adjustments.add(new JLabel("Left: "));
                         adjustments.add(new JTextField(""));
@@ -309,18 +411,17 @@ public class Main {
                             int right = Integer.parseInt(((JTextField) adjustments.getComponent(4)).getText());
                             int top = Integer.parseInt(((JTextField) adjustments.getComponent(6)).getText());
                             int bottom = Integer.parseInt(((JTextField) adjustments.getComponent(8)).getText());
-                            BufferedImage croppedImage = canvas.cropImage(left, right, top, bottom);
-                            canvas.setBackgroundImage(croppedImage);
+                            canvas.cropImage(left, right, top, bottom);
 
                             adjustments.removeAll();
                             adjustments.add(adjustmentsLabel);
                             adjustments.revalidate();
                             adjustments.repaint();
                         });
+
                         break;
                         case "ROTATE":
 
-                        canvas.setRotateMode(true);
                         adjustments.add(new JLabel("Angle: "));
                         JTextField angleField = new JTextField("");
                         angleField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
@@ -334,8 +435,7 @@ public class Main {
 
                         rotateSubmitButton.addActionListener(e1 -> {
                             int angle = Integer.parseInt(((JTextField) adjustments.getComponent(2)).getText());
-                            BufferedImage rotatedImage = canvas.rotateImage(angle);
-                            canvas.setBackgroundImage(rotatedImage);
+                            canvas.rotateImage(angle);
                             adjustments.removeAll();
                             adjustments.add(adjustmentsLabel);
                             adjustments.revalidate();
@@ -345,7 +445,6 @@ public class Main {
 
                         break;
                     case "FLIP":
-                        canvas.setFlipMode(true);
                         JButton horizontalFlipButton = new JButton("HORIZONTAL");
                         adjustments.add(horizontalFlipButton);
                         
@@ -353,8 +452,7 @@ public class Main {
                         adjustments.add(verticalFlipButton);
 
                         horizontalFlipButton.addActionListener(e1 -> {
-                            BufferedImage flippedImage = canvas.flipImage(true, false);
-                            canvas.setBackgroundImage(flippedImage);
+                            canvas.flipImage(true, false);
                             adjustments.removeAll();
                             adjustments.add(adjustmentsLabel);
                             adjustments.revalidate();
@@ -362,8 +460,7 @@ public class Main {
                         });
 
                         verticalFlipButton.addActionListener(e1 -> {
-                            BufferedImage flippedImage = canvas.flipImage(false, true);
-                            canvas.setBackgroundImage(flippedImage);
+                            canvas.flipImage(false, true);
                             adjustments.removeAll();
                             adjustments.add(adjustmentsLabel);
                             adjustments.revalidate();
@@ -373,34 +470,67 @@ public class Main {
 
 
                         break;
-                    case "BRIGHTNESS":
-                        canvas.setBrightnessMode(true);
-                        adjustments.add(new JLabel("Brightness: "));
-                        JTextField brightnessInputField = new JTextField("");
-                        JButton brightnessSubmitButton = new JButton("submit");
+                    case "OPACITY":
+                        // it is not working
+                        adjustments.add(new JLabel("Opacity: (0 to 100)"));
+                        JTextField opacityInputField = new JTextField("");
+                        opacityInputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+                        adjustments.add(opacityInputField);
 
 
-                        brightnessSubmitButton.addActionListener(a -> {
-                            int value = Integer.parseInt(brightnessInputField.getText());
+                        JButton opacitySubmitButton = new JButton("Submit");
+                        adjustments.add(opacitySubmitButton);
 
-                            BufferedImage brightenedImage = canvas.adjustBrightness(value);
-                            canvas.setBackgroundImage(brightenedImage);
+
+                        opacitySubmitButton.addActionListener(a -> {
+                            int value = Integer.parseInt(opacityInputField.getText());
+
+                            canvas.adjustOpacity(value);
 
                         });
-                        adjustments.add(brightnessInputField);
-                        adjustments.add(brightnessSubmitButton );
                         break;
                     case "CONTRAST":
-                        canvas.setContrastMode(true);
+                        adjustments.add(new JLabel("Contrast: (-100 to 100)"));
+                        JTextField contrastInputField = new JTextField("");
+                        contrastInputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+                        adjustments.add(contrastInputField);
+
+
+                        JButton contrastSubmitButton = new JButton("Submit");
+                        adjustments.add(contrastSubmitButton);
+
+                        contrastSubmitButton.addActionListener(a -> {
+                            int value = Integer.parseInt(contrastInputField.getText());
+                            canvas.adjustContrast(value);
+                        });
+
                         break;
-                    case "HUE":
-                        canvas.setHueMode(true);
-                        break;
+                    
                     case "SATURATION":
-                        canvas.setSaturationMode(true);
+                        System.out.println("SATURATION");
+                        adjustments.add(new JLabel("Saturation: (0 to 100)"));
+                        JTextField saturationInputField = new JTextField("");
+                        saturationInputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+                        adjustments.add(saturationInputField);
+
+                        JButton saturationSubmitButton = new JButton("submit");
+                        adjustments.add(saturationSubmitButton);
+
+                        saturationSubmitButton.addActionListener(ac -> {
+                            int value = Integer.parseInt(saturationInputField.getText());
+                            canvas.adjustSaturation(value);
+                        });
                         break;
                     case "RESET":
-                        canvas.reset(true);
+                        canvas.reset();
+                        break;
+                    case "INVERT":
+                        JButton invertButton = new JButton("INVERT");
+                        adjustments.add(invertButton);
+
+                        invertButton.addActionListener(e1 -> {
+                            canvas.invertImage();
+                        });
                         break;
                 }
 
@@ -422,7 +552,6 @@ public class Main {
         fileMenu.add(fileItem1);
         fileMenu.add(fileItem2);
         fileMenu.add(fileItem3);
-        fileMenu.add(fileItem4);
 
         fileItem1.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
@@ -436,9 +565,8 @@ public class Main {
                 try {
                     BufferedImage image = ImageIO.read(selectedFile);
                     if (image != null) {
-
+                        canvas.setImagePath(selectedFile.getAbsolutePath());
                         canvas.setBackgroundImage(image);
-                        System.out.println("Image successfully loaded.");
                     } else {
                         JOptionPane.showMessageDialog(frame, "Error loading image.", "Error",
                                 JOptionPane.ERROR_MESSAGE);
@@ -461,7 +589,71 @@ public class Main {
             }
         });
 
-        fileItem4.addActionListener(new ActionListener() {
+        
+
+       fileItem2.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setDialogTitle("Save Image");
+
+                fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG Images", "png"));
+                
+                int userSelection = fileChooser.showSaveDialog(null);
+                
+                if (userSelection == JFileChooser.APPROVE_OPTION) {
+                    File fileToSave = fileChooser.getSelectedFile();
+                    
+                    if (!fileToSave.getName().endsWith(".png")) {
+                        fileToSave = new File(fileToSave.getAbsolutePath() + ".png");
+                    }
+                    
+                    try {
+                        BufferedImage imageToSave = canvas.getBackgroundImage();  // Replace with your image
+                        
+                        ImageIO.write(imageToSave, "PNG", fileToSave);
+                        JOptionPane.showMessageDialog(null, "Image saved successfully!");
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(null, "Error saving image: " + ex.getMessage());
+                    }
+                }
+            }
+        });
+
+        InputMap inputMap = canvas.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = canvas.getActionMap();
+
+        // Associate Ctrl + Shift + S with the "saveImage" action
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK), "saveImage");
+        actionMap.put("saveImage", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setDialogTitle("Save Image");
+
+                fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG Images", "png"));
+                
+                int userSelection = fileChooser.showSaveDialog(null);
+                
+                if (userSelection == JFileChooser.APPROVE_OPTION) {
+                    File fileToSave = fileChooser.getSelectedFile();
+                    
+                    if (!fileToSave.getName().endsWith(".png")) {
+                        fileToSave = new File(fileToSave.getAbsolutePath() + ".png");
+                    }
+                    
+                    try {
+                        BufferedImage imageToSave = canvas.getBackgroundImage();  // Replace with your image
+                        
+                        ImageIO.write(imageToSave, "PNG", fileToSave);
+                        JOptionPane.showMessageDialog(null, "Image saved successfully!");
+                    } catch (IOException ex) {
+                        JOptionPane.showMessageDialog(null, "Error saving image: " + ex.getMessage());
+                    }
+                }
+            }   
+        });
+
+        fileItem3.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 System.exit(0);
@@ -475,9 +667,61 @@ public class Main {
         editMenu.add(editItem1);
         editMenu.add(editItem2);
 
+        editItem1.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.undo();
+            }
+        });
+
+        // Add Keyboard Shortcut (Ctrl + Z) for Undo
+        InputMap inputMapForUndo = canvas.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMapForUndo = canvas.getActionMap();
+
+        // Bind Ctrl + Z to "undo"
+        inputMapForUndo.put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, InputEvent.CTRL_DOWN_MASK), "undo");
+
+        // Define the Undo action
+        actionMapForUndo.put("undo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                canvas.undo(); // Call the undo method
+            }
+        });
+
+
+        editItem2.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.redo();
+            }
+        });
+
+        InputMap inputMapForRedo = canvas.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMapForRedo = canvas.getActionMap();
+
+        // Bind Ctrl + Z to "undo"
+        inputMapForRedo.put(KeyStroke.getKeyStroke(KeyEvent.VK_Y, InputEvent.CTRL_DOWN_MASK), "redo");
+
+        // Define the Undo action
+        actionMapForRedo.put("redo", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                canvas.redo(); // Call the undo method
+            }
+        });
+
+
         JMenu infoMenu = new JMenu("Info");
         JMenuItem infoItem1 = new JMenuItem("About");
         infoMenu.add(infoItem1);
+
+        infoItem1.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.about();
+            }
+        });
 
         menuBar.add(fileMenu);
         menuBar.add(editMenu);

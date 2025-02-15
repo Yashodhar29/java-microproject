@@ -303,8 +303,8 @@ public void about() {
 
 public class Main {
     public static void main(String[] args) {
-        final JFrame frame = new JFrame("Photo Editor");
-
+        final JFrame frame = new JFrame("Photo Enhancer - Java Microproject");
+        
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1280, 730);
         frame.setMinimumSize(new Dimension(1280, 730));

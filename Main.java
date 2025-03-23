@@ -14,13 +14,19 @@ import javax.imageio.ImageIO;
 import javax.swing.*;
 
 class CustomPanel extends JPanel {
+    private BufferedImage originalImage;  // Store the original unmodified image
     private BufferedImage backgroundImage = null;
     private String imagePath = null;
-    private Stack<BufferedImage>undoStack = new Stack<>();
-    private Stack<BufferedImage>redoStack = new Stack<>();
+    private Stack<BufferedImage> undoStack = new Stack<>();
+    private Stack<BufferedImage> redoStack = new Stack<>();
     
     int left, right, top, bottom;
     int imageWidth, imageHeight;
+
+    public CustomPanel() {
+        // Default constructor
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
@@ -28,279 +34,295 @@ class CustomPanel extends JPanel {
             int panelWidth = getWidth();
             int panelHeight = getHeight();
 
-            // Get the width and height of the image
             imageWidth = backgroundImage.getWidth();
             imageHeight = backgroundImage.getHeight();
 
-            // Calculate the scaling factor to fit the image within the panel
             double scaleX = (double) panelWidth / imageWidth;
             double scaleY = (double) panelHeight / imageHeight;
-            double scale = Math.min(scaleX, scaleY); // Choose the smaller scaling factor to maintain aspect ratio
+            double scale = Math.min(scaleX, scaleY);
 
-            // Calculate the new width and height of the image after scaling
             int newImageWidth = (int) (imageWidth * scale);
             int newImageHeight = (int) (imageHeight * scale);
 
-            // Calculate the x and y position to center the image in the panel
-            int x = (panelWidth - newImageWidth) / 2; // Horizontal center
-            int y = (panelHeight - newImageHeight) / 2; // Vertical center
+            int x = (panelWidth - newImageWidth) / 2;
+            int y = (panelHeight - newImageHeight) / 2;
 
-            // Draw the scaled image at the calculated position
             g.drawImage(backgroundImage, x, y, newImageWidth, newImageHeight, this);
         }
     }
 
     public void cropImage(int left, int right, int top, int bottom) {
-        int width = this.imageWidth - right - left;
-        int height = this.imageHeight - bottom - top;
-        BufferedImage croppedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-        for (int y = top; y <this.imageHeight - bottom; y++) {
-            for (int x = left; x < this.imageWidth - right; x++) {
+        if (backgroundImage == null) return;
+        
+        int width = imageWidth - right - left;
+        int height = imageHeight - bottom - top;
+        
+        // Ensure dimensions are valid
+        if (width <= 0 || height <= 0) return;
+        
+        BufferedImage croppedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = top; y < imageHeight - bottom; y++) {
+            for (int x = left; x < imageWidth - right; x++) {
                 int rgb = backgroundImage.getRGB(x, y);
                 croppedImage.setRGB(x - left, y - top, rgb);
             }
         }
-        undoStack.push(this.getBackgroundImage());
+        undoStack.push(backgroundImage);
         redoStack.clear();
-        this.setBackgroundImage(croppedImage);
+        setBackgroundImage(croppedImage);
     }
 
     public void flipImage(boolean horizontal, boolean vertical) {
-        BufferedImage flippedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
-        if(horizontal) {
+        if (backgroundImage == null) return;
+        
+        BufferedImage flippedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB);
+        if (horizontal && !vertical) {
             for (int y = 0; y < imageHeight; y++) {
                 for (int x = 0; x < imageWidth; x++) {
                     int rgb = backgroundImage.getRGB(x, y);
                     flippedImage.setRGB(imageWidth - x - 1, y, rgb);
                 }
             }
-            undoStack.push(this.getBackgroundImage());
-            this.setBackgroundImage(flippedImage);
-        } else {
+        } else if (vertical && !horizontal) {
             for (int y = 0; y < imageHeight; y++) {
                 for (int x = 0; x < imageWidth; x++) {
                     int rgb = backgroundImage.getRGB(x, y);
                     flippedImage.setRGB(x, imageHeight - y - 1, rgb);
-                }   
+                }
+            }
+        } else if (horizontal && vertical) {
+            for (int y = 0; y < imageHeight; y++) {
+                for (int x = 0; x < imageWidth; x++) {
+                    int rgb = backgroundImage.getRGB(x, y);
+                    flippedImage.setRGB(imageWidth - x - 1, imageHeight - y - 1, rgb);
+                }
             }
         }
-        undoStack.push(this.getBackgroundImage());
+        undoStack.push(backgroundImage);
         redoStack.clear();
-        this.setBackgroundImage(flippedImage);
+        setBackgroundImage(flippedImage);
     }
 
     public void rotateImage(int angle) {
-        BufferedImage rotatedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_RGB);
+        if (backgroundImage == null) return;
+        
+        BufferedImage rotatedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = rotatedImage.createGraphics();
         g2d.rotate(Math.toRadians(angle), imageWidth / 2.0, imageHeight / 2.0);
         g2d.drawImage(backgroundImage, 0, 0, null);
         g2d.dispose();
-        this.setBackgroundImage(rotatedImage);
-        undoStack.push(this.getBackgroundImage());
+        undoStack.push(backgroundImage);
         redoStack.clear();
+        setBackgroundImage(rotatedImage);
     }
 
-    
+    public void adjustContrast(int contrast) {
+        if (backgroundImage == null) return;
+        
+        int width = backgroundImage.getWidth();
+        int height = backgroundImage.getHeight();
+        BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 
-public void adjustContrast(int contrast) {
-    int width = backgroundImage.getWidth();
-    int height = backgroundImage.getHeight();
-    BufferedImage adjustedImage = new BufferedImage(width, height, backgroundImage.getType());
+        float factor = (float) (contrast / 100.0 + 1.0);
 
-    // Convert contrast range from [-100, 100] to a factor (1.0 means no change)
-    float factor = (float) (contrast / 100.0 + 1.0);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = backgroundImage.getRGB(x, y);
+                int a = (rgb >> 24) & 0xFF;
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int rgb = backgroundImage.getRGB(x, y);
-            int a = (rgb >> 24) & 0xFF; // Extract alpha
-            int r = (rgb >> 16) & 0xFF;
-            int g = (rgb >> 8) & 0xFF;
-            int b = rgb & 0xFF;
+                r = (int) ((r - 128) * factor + 128);
+                g = (int) ((g - 128) * factor + 128);
+                b = (int) ((b - 128) * factor + 128);
 
-            // Adjust contrast: (color - 128) * factor + 128
-            r = (int) ((r - 128) * factor + 128);
-            g = (int) ((g - 128) * factor + 128);
-            b = (int) ((b - 128) * factor + 128);
+                r = Math.min(Math.max(r, 0), 255);
+                g = Math.min(Math.max(g, 0), 255);
+                b = Math.min(Math.max(b, 0), 255);
 
-            // Clamp values between [0, 255]
-            r = Math.min(Math.max(r, 0), 255);
-            g = Math.min(Math.max(g, 0), 255);
-            b = Math.min(Math.max(b, 0), 255);
-
-            int newRGB = (a << 24) | (r << 16) | (g << 8) | b;
-            adjustedImage.setRGB(x, y, newRGB);
+                int newRGB = (a << 24) | (r << 16) | (g << 8) | b;
+                adjustedImage.setRGB(x, y, newRGB);
+            }
         }
+        undoStack.push(backgroundImage);
+        redoStack.clear();
+        setBackgroundImage(adjustedImage);
     }
-    undoStack.push(this.getBackgroundImage());
-    redoStack.clear();
-    this.setBackgroundImage(adjustedImage);
-}
 
+    public void adjustOpacity(int opacity) {
+        if (originalImage == null) return;
 
+        int width = originalImage.getWidth();
+        int height = originalImage.getHeight();
 
-public void adjustOpacity(int opacity) {
-    int width = backgroundImage.getWidth();
-    int height = backgroundImage.getHeight();
-    BufferedImage adjustedImage = new BufferedImage(width, height, backgroundImage.getType());
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int rgb = backgroundImage.getRGB(x, y);
-            int a = (rgb >> 24) & 0xFF; // Extract alpha
-            int r = (rgb >> 16) & 0xFF;
-            int g = (rgb >> 8) & 0xFF;
-            int b = rgb & 0xFF;
+        BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = adjustedImage.createGraphics();
 
-            // Adjust opacity: alpha * opacity / 100
-            a = (int) (a * opacity / 100.0);
+        opacity = Math.min(Math.max(opacity, 0), 100);
+        float alpha = opacity / 100.0f;
 
-            // Clamp values between [0, 255]
-            a = Math.min(Math.max(a, 0), 255);
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.CLEAR));
+        g2d.fillRect(0, 0, width, height);
 
-            int newRGB = (a << 24) | (r << 16) | (g << 8) | b;
-            adjustedImage.setRGB(x, y, newRGB);
+        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alpha));
+        g2d.drawImage(originalImage, 0, 0, null);
+
+        g2d.dispose();
+
+        if (backgroundImage != null) {
+            undoStack.push(backgroundImage);
         }
+        redoStack.clear();
+        backgroundImage = adjustedImage;
+        repaint();
     }
-    undoStack.push(this.getBackgroundImage());
-    redoStack.clear();
-    this.setBackgroundImage(adjustedImage);
-}
 
-public void adjustSaturation(int saturation) {
-    int width = backgroundImage.getWidth();
-    int height = backgroundImage.getHeight();
-    BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+    public void adjustSaturation(int saturation) {
+        if (originalImage == null) return;
 
-    // Convert input range (-100 to 100) to a usable factor
-    float saturationFactor = (saturation / 100.0f) + 1.0f; // -100 → 0.0, 0 → 1.0, +100 → 2.0
+        int width = originalImage.getWidth();
+        int height = originalImage.getHeight();
+        BufferedImage adjustedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int rgb = backgroundImage.getRGB(x, y);
-            int alpha = (rgb >> 24) & 0xFF; // Extract alpha
+        // Adjust saturation range: -100 (grayscale) to +100 (double saturation)
+        float saturationFactor = (saturation / 100.0f) + 1.0f; // -100 → 0, 0 → 1, +100 → 2
 
-            // Extract RGB values
-            int red = (rgb >> 16) & 0xFF;
-            int green = (rgb >> 8) & 0xFF;
-            int blue = rgb & 0xFF;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = originalImage.getRGB(x, y); // Use originalImage
+                int alpha = (rgb >> 24) & 0xFF;
 
-            // Convert RGB to HSB
-            float[] hsb = Color.RGBtoHSB(red, green, blue, null);
+                int red = (rgb >> 16) & 0xFF;
+                int green = (rgb >> 8) & 0xFF;
+                int blue = rgb & 0xFF;
 
-            // Adjust the saturation and clamp it between [0,1]
-            hsb[1] *= saturationFactor;
-            hsb[1] = Math.min(1.0f, Math.max(0.0f, hsb[1]));
+                float[] hsb = Color.RGBtoHSB(red, green, blue, null);
+                hsb[1] = hsb[1] * saturationFactor; // Adjust saturation
+                hsb[1] = Math.min(1.0f, Math.max(0.0f, hsb[1])); // Clamp between 0 and 1
 
-            // Convert back to RGB
-            int newRGB = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
-
-            // Preserve the original alpha channel
-            int finalRGB = (alpha << 24) | (newRGB & 0xFFFFFF);
-            adjustedImage.setRGB(x, y, finalRGB);
+                int newRGB = Color.HSBtoRGB(hsb[0], hsb[1], hsb[2]);
+                int finalRGB = (alpha << 24) | (newRGB & 0xFFFFFF);
+                adjustedImage.setRGB(x, y, finalRGB);
+            }
         }
-    }
-    undoStack.push(this.getBackgroundImage());
-    redoStack.clear();
-    this.setBackgroundImage(adjustedImage);
-}
-
-public void invertImage() {
-    // Create a new BufferedImage to store the inverted image
-    BufferedImage invertedImage = new BufferedImage(backgroundImage.getWidth(), backgroundImage.getHeight(), backgroundImage.getType());
-
-    // Iterate through each pixel of the image
-    for (int x = 0; x < backgroundImage.getWidth(); x++) {
-        for (int y = 0; y < backgroundImage.getHeight(); y++) {
-            // Get the RGB value of the current pixel
-            int rgb = backgroundImage.getRGB(x, y);
-
-            // Extract the color components (red, green, blue)
-            Color color = new Color(rgb);
-            int red = color.getRed();
-            int green = color.getGreen();
-            int blue = color.getBlue();
-
-            // Invert the colors by subtracting each component from 255
-            int invertedRed = 255 - red;
-            int invertedGreen = 255 - green;
-            int invertedBlue = 255 - blue;
-
-            // Set the new inverted color back to the pixel
-            Color invertedColor = new Color(invertedRed, invertedGreen, invertedBlue);
-            invertedImage.setRGB(x, y, invertedColor.getRGB());
+        if (backgroundImage != null) {
+            undoStack.push(backgroundImage);
         }
+        redoStack.clear();
+        setBackgroundImage(adjustedImage);
+    }
+    public void invertImage() {
+        if (backgroundImage == null) return;
+        
+        BufferedImage invertedImage = new BufferedImage(imageWidth, imageHeight, BufferedImage.TYPE_INT_ARGB);
+
+        for (int x = 0; x < imageWidth; x++) {
+            for (int y = 0; y < imageHeight; y++) {
+                int rgb = backgroundImage.getRGB(x, y);
+                int alpha = (rgb >> 24) & 0xFF;
+                int red = (rgb >> 16) & 0xFF;
+                int green = (rgb >> 8) & 0xFF;
+                int blue = rgb & 0xFF;
+
+                int invertedRed = 255 - red;
+                int invertedGreen = 255 - green;
+                int invertedBlue = 255 - blue;
+
+                int newRGB = (alpha << 24) | (invertedRed << 16) | (invertedGreen << 8) | invertedBlue;
+                invertedImage.setRGB(x, y, newRGB);
+            }
+        }
+        undoStack.push(backgroundImage);
+        redoStack.clear();
+        setBackgroundImage(invertedImage);
     }
 
-    // Return the inverted image
-    undoStack.push(this.getBackgroundImage());
-    redoStack.clear();
-    this.setBackgroundImage(invertedImage);
-}
-
-public void setImagePath(String path) {
-    System.out.println("obtained path: " + path);
-    this.imagePath = path;
-}
-
-public void setBackgroundImage(BufferedImage image) {
-    if (image != null) {
-        // Store a deep copy of the original image
-        this.backgroundImage = image;
+    public void setImagePath(String path) {
+        this.imagePath = path;
     }
-    repaint();
-}
 
-public BufferedImage getBackgroundImage() {
-    return backgroundImage;
-}
-
-public void reset() {
-    File imageFile = new File(imagePath);
-    
-    try {
-        // Read the image using ImageIO.read()
-        BufferedImage image = ImageIO.read(imageFile);
+    public void setBackgroundImage(BufferedImage image) {
         if (image != null) {
-            System.out.println("Image loaded successfully.");
-            this.setBackgroundImage(image);
-        } else {
-            System.out.println("Error: Image could not be read (returned null).");
+            BufferedImage argbImage = new BufferedImage(
+                image.getWidth(), 
+                image.getHeight(), 
+                BufferedImage.TYPE_INT_ARGB
+            );
+            Graphics2D g = argbImage.createGraphics();
+            g.drawImage(image, 0, 0, null);
+            g.dispose();
+
+            if (originalImage == null) { // Only set originalImage on first load
+                originalImage = new BufferedImage(
+                    image.getWidth(),
+                    image.getHeight(),
+                    BufferedImage.TYPE_INT_ARGB
+                );
+                Graphics2D g2 = originalImage.createGraphics();
+                g2.drawImage(image, 0, 0, null);
+                g2.dispose();
+            }
+            backgroundImage = argbImage;
+            imageWidth = backgroundImage.getWidth();
+            imageHeight = backgroundImage.getHeight();
+            repaint();
         }
-    } catch (IOException ex) {
-        ex.printStackTrace();
-        System.out.println("Error reading the image file.");
+    }
+
+    public BufferedImage getBackgroundImage() {
+        return backgroundImage;
+    }
+
+    public void reset() {
+        if (imagePath == null) return;
+        
+        File imageFile = new File(imagePath);
+        try {
+            BufferedImage image = ImageIO.read(imageFile);
+            if (image != null) {
+                originalImage = null; // Allow new original image
+                setBackgroundImage(image);
+                undoStack.clear();
+                redoStack.clear();
+            } else {
+                System.out.println("Error: Image could not be read (returned null).");
+            }
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            System.out.println("Error reading the image file.");
+        }
+    }
+
+    public void undo() {
+        if (!undoStack.isEmpty()) {
+            redoStack.push(backgroundImage);
+            backgroundImage = undoStack.pop();
+            imageWidth = backgroundImage.getWidth();
+            imageHeight = backgroundImage.getHeight();
+            repaint();
+        } else {
+            JOptionPane.showMessageDialog(null, "No actions to undo!");
+        }
+    }
+
+    public void redo() {
+        if (!redoStack.isEmpty()) {
+            undoStack.push(backgroundImage);
+            backgroundImage = redoStack.pop();
+            imageWidth = backgroundImage.getWidth();
+            imageHeight = backgroundImage.getHeight();
+            repaint();
+        } else {
+            JOptionPane.showMessageDialog(null, "No actions to redo!");
+        }
+    }
+
+    public void about() {
+        String message = "Java Swing Photo Enhancer (MICROPROJECT)\nCreated By:\n1. Yashodhar Chavan(23210230262)\n2. Yuvraj Gandhmal(enrollment_no)";
+        JOptionPane.showMessageDialog(null, message);
     }
 }
-
-public void undo() {
-    if (!undoStack.isEmpty()) {
-        redoStack.push(this.getBackgroundImage()); // Save current state to redo stack
-        BufferedImage previousImage = undoStack.pop(); // Restore last image from undo stack
-        this.setBackgroundImage(previousImage);
-    } else {
-        JOptionPane.showMessageDialog(null, "No actions to undo!");
-    }
-}
-
-public void redo() {
-    if (!redoStack.isEmpty()) {
-        undoStack.push(this.getBackgroundImage()); // Save current state to undo stack
-        BufferedImage nextImage = redoStack.pop(); // Restore last image from redo stack
-        this.setBackgroundImage(nextImage);
-    } else {
-        JOptionPane.showMessageDialog(null, "No actions to redo!");
-    }
-}
-
-public void about() {
-    String message = "Java Swing Photo Enhancer (MICROPROJECT)\nCreated By:\n1. Yashodhar Chavan(23210230262)\n2. Yuvraj Gandhmal(enrollment_no)";
-    JOptionPane.showMessageDialog(null, message);
-
-}
-
-
-}
-
 public class Main {
     public static void main(String[] args) {
         final JFrame frame = new JFrame("Photo Enhancer - Java Microproject");
@@ -313,7 +335,7 @@ public class Main {
 
         JMenuBar menuBar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
-        JMenuItem fileItem1 = new JMenuItem("OPEN");
+        JMenuItem fileItem1 = new JMenuItem("IMPORT");
         JMenuItem fileItem2 = new JMenuItem("SAVE AS (ctrl+shift+s)");
         JMenuItem fileItem3 = new JMenuItem("EXIT (alt+f4)");
 
@@ -340,16 +362,6 @@ public class Main {
         options.setMaximumSize(new Dimension(300, 800));
         options.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        // NOTE: 
-        // 1. Cropping of image done yusss yess I am happy thank I really thank.
-        // 2. Ohh my GOD, the rotate has also completed. I am so happy. The sky is limit. Thank you
-        // 3. I am stunned to see that flip is also completed. Thank you so much.
-        // 4. Thank GOD reset also works. ChatGPT is very good I just know at high level what is happening
-        // 5. I really really thank universe. the saturation part is done.
-        // 6. contrast part is also done
-        // 7. invert also works very well
-        // 8. opacity works also well. What else we need?? I am totally happy now. Yes I did not code it but I at least understood it in high level
-        // I am so happy now. The universe made me happy. I really love engineers at chatGPT and universe. Thank you so much the 90% work is done. The software is ready. I did not thing I can do it. But it happend. 
 
 
         JButton[] listOfButtons = new JButton[8];
@@ -507,8 +519,7 @@ public class Main {
                         break;
                     
                     case "SATURATION":
-                        System.out.println("SATURATION");
-                        adjustments.add(new JLabel("Saturation: (0 to 100)"));
+                        adjustments.add(new JLabel("Saturation: (-100 to 100)"));
                         JTextField saturationInputField = new JTextField("");
                         saturationInputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
                         adjustments.add(saturationInputField);

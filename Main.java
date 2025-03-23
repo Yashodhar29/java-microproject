@@ -17,10 +17,9 @@ class CustomPanel extends JPanel {
     private BufferedImage originalImage;  // Store the original unmodified image
     private BufferedImage backgroundImage = null;
     private String imagePath = null;
-    private Stack<BufferedImage> undoStack = new Stack<>();
-    private Stack<BufferedImage> redoStack = new Stack<>();
+    final private Stack<BufferedImage> undoStack = new Stack<>();
+    final private Stack<BufferedImage> redoStack = new Stack<>();
     
-    int left, right, top, bottom;
     int imageWidth, imageHeight;
 
     public CustomPanel() {
@@ -289,8 +288,8 @@ class CustomPanel extends JPanel {
                 System.out.println("Error: Image could not be read (returned null).");
             }
         } catch (IOException ex) {
-            ex.printStackTrace();
             System.out.println("Error reading the image file.");
+            ex.printStackTrace();
         }
     }
 
@@ -395,7 +394,7 @@ public class Main {
         adjustments.add(adjustmentsLabel);
 
         for (JButton button : listOfButtons) {
-            button.addActionListener(e -> {
+            button.addActionListener(_ -> {
 
                 adjustments.removeAll(); // Clear previous adjustments
                 adjustments.add(adjustmentsLabel); // Re-add the label after clearing
@@ -417,7 +416,7 @@ public class Main {
 
                         JButton cropSubmitButton = new JButton("submit");
                         adjustments.add(cropSubmitButton);
-                        cropSubmitButton.addActionListener(e1 -> {
+                        cropSubmitButton.addActionListener(_ -> {
                             // NOTE: was working on crop feature
                             int left = Integer.parseInt(((JTextField) adjustments.getComponent(2)).getText());
                             int right = Integer.parseInt(((JTextField) adjustments.getComponent(4)).getText());

@@ -394,7 +394,7 @@ public class Main {
         adjustments.add(adjustmentsLabel);
 
         for (JButton button : listOfButtons) {
-            button.addActionListener(_ -> {
+            button.addActionListener(a -> {
 
                 adjustments.removeAll(); // Clear previous adjustments
                 adjustments.add(adjustmentsLabel); // Re-add the label after clearing
@@ -416,7 +416,7 @@ public class Main {
 
                         JButton cropSubmitButton = new JButton("submit");
                         adjustments.add(cropSubmitButton);
-                        cropSubmitButton.addActionListener(_ -> {
+                        cropSubmitButton.addActionListener(b -> {
                             // NOTE: was working on crop feature
                             int left = Integer.parseInt(((JTextField) adjustments.getComponent(2)).getText());
                             int right = Integer.parseInt(((JTextField) adjustments.getComponent(4)).getText());
@@ -518,7 +518,7 @@ public class Main {
                         break;
                     
                     case "SATURATION":
-                        adjustments.add(new JLabel("Saturation: (-100 to 100)"));
+                        adjustments.add(new JLabel("Saturation: (-100 to 1000)"));
                         JTextField saturationInputField = new JTextField("");
                         saturationInputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
                         adjustments.add(saturationInputField);
